@@ -2,10 +2,9 @@ local oop = require('oop')
 local fmt = require "fmt"
 
 -- Define the base class 'Animal'
-local Animal = Object:extend{}
+local Animal = Object:extend("Animal")
 
 function Animal:init(name, other)
-    fmt.pyprint(name, other)
     self.name = name
 end
 
@@ -14,7 +13,7 @@ function Animal:speak()
 end
 
 -- Define the subclass 'Dog' that extends 'Animal'
-local Dog = Animal:extend{}
+local Dog = Animal:extend("Dog")
 
 function Dog:init(name, breed)
     self:super():init(name) -- Call the superclass's init method
@@ -30,7 +29,7 @@ local myDog = Dog("Rex", "Golden Retriever")
 
 -- Test the functionality
 print(myDog:speak())           -- Output: Rex barks!
--- print(Dog:super().speak(myDog)) -- Output: Rex makes a sound.
+print(Dog:super().speak(myDog)) -- Output: Rex makes a sound.
 
 -- Check if myDog is an instance of Dog and Animal
 print("Is myDog a Dog?", oop.is_instance(myDog, Dog))           -- Output: true

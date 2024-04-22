@@ -4,7 +4,7 @@ local oop = require "oop"
 function test_fmt()
     local nested = { a = 1, b = 2, c = { d = 3, e = 4 }}
     print(fmt.format_table(nested, { indent = 4 }))
-    print(fmt.format_table(nested, { indent = 2, table_pointers = true }))
+    print(fmt.format_table(nested, { indent = 2, show_ptr = true }))
     fmt.pyprint(5, print, {}, nil, { 1, 2, "a" }, io.stdin, { a = 1, b = 2 })
     local mt = { __add = function () return 1 end }
     local t = setmetatable({}, mt)
@@ -13,9 +13,9 @@ function test_fmt()
 end
 
 function test_oop()
-    local Animal = Object:extend{
+    local Animal = Object:extend("Animal", {
         cries = 0,
-    }
+    })
 
     function Animal:init()
         print("animal init")
@@ -26,7 +26,7 @@ function test_oop()
         self.cries = self.cries + 1
     end
 
-    local Cat = Animal:extend{}
+    local Cat = Animal:extend("Cat", {})
 
     function Cat:init(init_val)
         self:super():init()
@@ -55,12 +55,12 @@ function test_oop()
     local catsum = cat + Cat(4)
     print(catsum.value)
 
-    fmt.pyprint_opts({ table_pointers = true }, "Object =", Object)
-    fmt.pyprint_opts({ table_pointers = true }, "Animal =", Animal)
-    fmt.pyprint_opts({ table_pointers = true }, "Cat =", Cat)
-    fmt.pyprint_opts({ table_pointers = true }, "cat =", cat)
-    fmt.pyprint_opts({ table_pointers = true }, "cat:super() =", cat:super())
-    fmt.pyprint_opts({ table_pointers = true }, "cat:super():super() =", cat:super():super())
+    fmt.pyprint_opts({ show_ptr = true }, "Object =", Object)
+    fmt.pyprint_opts({ show_ptr = true }, "Animal =", Animal)
+    fmt.pyprint_opts({ show_ptr = true }, "Cat =", Cat)
+    fmt.pyprint_opts({ show_ptr = true }, "cat =", cat)
+    fmt.pyprint_opts({ show_ptr = true }, "cat:super() =", cat:super())
+    fmt.pyprint_opts({ show_ptr = true }, "cat:super():super() =", cat:super():super())
 
     local anim = Animal()
     anim:cry()
