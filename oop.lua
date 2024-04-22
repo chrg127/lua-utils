@@ -1,96 +1,82 @@
 local oop = {}
 
-Object = {}
+local fmt = require "fmt"
 
-function Object:extend(class)
-    self.__index = self
-    self.__call = function (class, ...)
-        local inst = {}
-        class.__index = class
-        setmetatable(inst, class)
-        if class.init ~= nil then
-            inst:init(...)
-        end
-        return inst
+Object = { __name = "instance of Object", __classname = "Object" }
+setmetatable(Object, { __name = "Object" })
+oop.Object = Object
+
+function Object:super()
+    local obj = self
+    local class = self.__class and getmetatable(obj) or obj
+    local superclass = getmetatable(class)
+    local proxy = { __ptr = self, name = "proxy for " .. tostring(class) }
+
+    function proxy:super()
+        return class.super(obj)
     end
 
-    function class:super()
-        local obj = self
-        local class = getmetatable(obj)
-        -- if class == nil then
-        --     error "passed argument not instance of any class"
-        -- end
-        local superclass = getmetatable(class)
-        -- if superclass == nil then
-        --     error "class of object doesn't have a superclass"
-        -- end
-        local proxy = { __ptr = self }
-
-        function proxy:super()
-            return class.super(obj)
-        end
-
-        return setmetatable(proxy, {
-            __index = function (t, key)
-                local method = superclass[key]
-                if method == nil then
-                    error "method not found"
+    return setmetatable(proxy, {
+        __index = function (t, key)
+            local method = superclass[key]
+            if method == nil then
+                error "method not found"
+            elseif type(method) ~= "function" then
+                return method
+            else
+                return function (self, ...)
+                    -- if method was called on proxy, hijack it
+                    return method(self == proxy and proxy.__ptr or self, ...)
                 end
-                if type(method) ~= "function" then
-                    return method
-                end
-                local method_proxy = { __ptr = method }
-                return setmetatable(method_proxy, {
-                    __call = function (first_arg, ...)
-                        if first_arg == superclass then
-                            return method_proxy.__ptr(first_arg, ...)
-                        end
-                        return method_proxy.__ptr(proxy.__ptr, ...)
-                    end
-                })
             end
-        })
+        end
+    })
+end
+
+function Object:extend(name, class)
+    class = class or {}
+    class.__classname = name
+
+    if self.__class then
+        print("note: extending an object:", tostring(self))
+    end
+
+    self.__index = self
+    self.__call = function (class, ...)
+        class.__name = "instance of " .. class.__classname
+        class.__index = class
+        local inst = setmetatable({ __class = class }, class)
+        local init_method = inst.init
+        if init_method ~= nil then
+            init_method(inst, ...)
+        end
+        return inst
     end
 
     return setmetatable(class, self)
 end
 
-function is_instance(obj, class)
-    return getmetatable(obj) == class
+function oop.is_instance(obj, class)
+    while obj ~= nil do
+        local mt = getmetatable(obj)
+        if mt == class then
+            return true
+        end
+        obj = mt
+    end
+    return false
 end
 
--- alternate super() implementation
+function oop.bind(obj, method)
+    return function (...)
+        return method(obj, ...)
+    end
+end
 
--- function super(obj, class)
---     class = class or getmetatable(obj)
---     if class == nil then
---         error "passed argument not instance of any class"
---     end
---     local superclass = getmetatable(class)
---     if superclass == nil then
---         error "class of object doesn't have a superclass"
---     end
---     local proxy = { __ptr = obj }
---     return setmetatable(proxy, {
---         __index = function (t, key)
---             local method = superclass[key]
---             if method == nil then
---                 error "method not found"
---             end
---             if type(method) ~= "function" then
---                 return method
---             end
---             local method_proxy = { __ptr = method }
---             return setmetatable(method_proxy, {
---                 __call = function (first_arg, ...)
---                     if first_arg == superclass then
---                         return method_proxy.__ptr(first_arg, ...)
---                     end
---                     return method_proxy.__ptr(proxy.__ptr, ...)
---                 end
---             })
---         end
---     })
--- end
+function oop.add_attributes(obj, attrs)
+    for k, v in pairs(attrs) do
+        obj[k] = v
+    end
+end
 
 return oop
