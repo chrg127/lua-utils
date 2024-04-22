@@ -17,7 +17,7 @@ function fmt.format_table(t, opts)
     if next(t) == nil then
         return spaces(opts) .. "{}"
     end
-    local s = (opts.table_pointers and tostring(t) .. " " or "") .. "{" .. line_end
+    local s = (opts.show_ptr and tostring(t) .. " " or "") .. "{" .. line_end
     opts.depth = opts.depth + 1
     local ss = spaces(opts)
     for k, v in pairs(t) do
