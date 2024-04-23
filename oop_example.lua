@@ -15,7 +15,7 @@ local A = Object:extend("A", { val = 42 })
 --     - the class A has a class attribute val. you can access this in methods
 --       either with self.val or A.val.
 --     - extend is also where you should be defining "static" methods.
-fmt.pyprint_opts({ indent = 4, show_ptr = true }, A)
+fmt.pyprint_opts({ indent = 4, show_ptr = true }, "A =", A)
 
 -- declare a constructor
 function A:init(bar, greet)
@@ -27,6 +27,8 @@ end
 
 -- create a new instance
 local a = A(2, "hi")
+-- you can also say:
+local ab = oop.new(A, 3, "hii")
 
 -- let's inspect this instance.
 -- we find all attributes we declared in A:init(). we also find a __class key,
@@ -34,18 +36,18 @@ local a = A(2, "hi")
 -- note that that __class key is the only real difference between objects created
 -- with extend() and those created with classname(). this difference is important
 -- when considering methods like super().
-fmt.pyprint_opts({ indent = 4, show_ptr = true }, a)
+fmt.pyprint_opts({ indent = 4, show_ptr = true }, "a =", a)
 
 -- declare a subclass of A
 local B = A:extend("B", { qux = 64 })
 
 -- inspecting B shows that it's an instance of A, with a single class field 'qux'
-fmt.pyprint_opts({ indent = 4, show_ptr = true }, B)
+fmt.pyprint_opts({ indent = 4, show_ptr = true }, "B =", B)
 
 -- you can, by the way, extend an object. this likely won't do any good for you,
 -- so if this happens then a warning will be issued.
 local aa = a:extend("aa")
-fmt.pyprint_opts({ indent = 4, show_ptr = true }, aa)
+fmt.pyprint_opts({ indent = 4, show_ptr = true }, "aa =", aa)
 
 -- declare a method on A, then override it on B
 function A:print_foo()
@@ -136,7 +138,7 @@ fmt.pyprint("method =", method)
 method()
 
 -- another utility function is oop.add_attributes. this can be used in ctors
--- to add arbitrary attributes.
+-- (but also elsewhere) to add arbitrary attributes to objects.
 local C = Object:extend("C")
 function C:init(attrs)
     oop.add_attributes(self, attrs)

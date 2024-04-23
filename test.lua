@@ -55,19 +55,56 @@ function test_oop()
     local catsum = cat + Cat(4)
     print(catsum.value)
 
-    fmt.pyprint_opts({ show_ptr = true }, "Object =", Object)
-    fmt.pyprint_opts({ show_ptr = true }, "Animal =", Animal)
-    fmt.pyprint_opts({ show_ptr = true }, "Cat =", Cat)
-    fmt.pyprint_opts({ show_ptr = true }, "cat =", cat)
-    fmt.pyprint_opts({ show_ptr = true }, "cat:super() =", cat:super())
-    fmt.pyprint_opts({ show_ptr = true }, "cat:super():super() =", cat:super():super())
+    -- fmt.pyprint_opts({ show_ptr = true }, "Object =", Object)
+    -- fmt.pyprint_opts({ show_ptr = true }, "Animal =", Animal)
+    -- fmt.pyprint_opts({ show_ptr = true }, "Cat =", Cat)
+    -- fmt.pyprint_opts({ show_ptr = true }, "cat =", cat)
+    -- fmt.pyprint_opts({ show_ptr = true }, "cat:super() =", cat:super())
+    -- fmt.pyprint_opts({ show_ptr = true }, "cat:super():super() =", cat:super():super())
 
     local anim = Animal()
     anim:cry()
     print(anim.cries)
     -- will error
-    anim:print_data()
+    -- anim:print_data()
+end
+
+function test_oop2()
+    -- Define the base class 'Animal'
+    local Animal = Object:extend("Animal")
+
+    function Animal:init(name, other)
+        self.name = name
+    end
+
+    function Animal:speak()
+        return self.name .. " makes a sound."
+    end
+
+    -- Define the subclass 'Dog' that extends 'Animal'
+    local Dog = Animal:extend("Dog")
+
+    function Dog:init(name, breed)
+        self:super():init(name) -- Call the superclass's init method
+        self.breed = breed
+    end
+
+    function Dog:speak()
+        return self.name .. " barks!"
+    end
+
+    -- Create an instance of Dog
+    local myDog = Dog("Rex", "Golden Retriever")
+
+    -- Test the functionality
+    print(myDog:speak())           -- Output: Rex barks!
+    print(Dog:super().speak(myDog)) -- Output: Rex makes a sound.
+
+    -- Check if myDog is an instance of Dog and Animal
+    print("Is myDog a Dog?", oop.is_instance(myDog, Dog))           -- Output: true
+    print("Is myDog an Animal?", oop.is_instance(myDog, Animal))    -- Output: true
 end
 
 test_fmt()
 test_oop()
+test_oop2()
