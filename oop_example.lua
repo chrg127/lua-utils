@@ -112,6 +112,9 @@ local v2 = v1 + Vec2(5, 4)
 local v3 = v2 * 3
 print(v3.x, v3.y) -- prints 27 27
 
+-- you can get an object's class directly using get_class:
+fmt.pyprint(oop.get_class(a))
+
 -- the library provides an is_instance function.
 -- it will check if the provided object is an instance of a class, following
 -- parent classes too.
@@ -147,3 +150,12 @@ end
 local c = C{x = 1, foo = "hi", bar = 3}
 fmt.pyprint("c =", c)
 print(c.x, c.foo, c.bar)
+
+-- here's a really weird feature:
+-- because classes are instances of their superclass, any method defined on a
+-- superclass can be called on a class:
+function A:some_method()
+    print("some_method")
+end
+
+B:some_method()

@@ -1,5 +1,6 @@
 local fmt = require "fmt"
 local oop = require "oop"
+--local oop = require "oop-more"
 
 function test_fmt()
     local nested = { a = 1, b = 2, c = { d = 3, e = 4 }}
@@ -69,6 +70,24 @@ function test_oop()
     -- anim:print_data()
 end
 
+function test_oop_more()
+    local Vec = Object:extend("Vec", {
+        magnitude = oop.property(function (self)
+            return math.sqrt(self.x * self.x + self.y * self.y)
+        end)
+    })
+
+    function Vec:init(x, y)
+        self.x = x
+        self.y = y
+    end
+
+    local v = Vec(3, 3)
+    print(v.magnitude)
+    v.x = 2
+    print(v.magnitude)
+end
+
 function test_oop2()
     -- Define the base class 'Animal'
     local Animal = Object:extend("Animal")
@@ -105,6 +124,8 @@ function test_oop2()
     print("Is myDog an Animal?", oop.is_instance(myDog, Animal))    -- Output: true
 end
 
-test_fmt()
+--test_fmt()
 test_oop()
+test_oop_more()
 test_oop2()
+--test_oop_more()

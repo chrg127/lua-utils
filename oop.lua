@@ -18,7 +18,14 @@ local fmt = require "fmt"
 -- and stops when it finds one. It won't call any superclass's init method,
 -- calling those must be done from the class.
 function oop.new(class, ...)
-    class.__index = class
+    class.__index = function (inst, key)
+        local attr = class[key]
+        if type(attr) == 'table' and type(attr.__get) == 'function' then
+            return attr.__get(inst)
+        else
+            return attr
+        end
+    end
     class.__name = class.__classname and "instance of " .. class.__classname
                                      or "instance of unknown class"
     local inst = setmetatable({ __is_instance = true }, class)
@@ -27,6 +34,10 @@ function oop.new(class, ...)
         init_method(inst, ...)
     end
     return inst
+end
+
+function oop.get_class(obj)
+    return getmetatable(obj)
 end
 
 -- Base object from which to create new classes. It contains nothing except
@@ -73,8 +84,8 @@ end
 -- The proxy accesses any attribute or function on the class normally, but any
 -- method called will be called with self set to the self passed to super().
 function Object:super()
-    local class = self.__is_instance and getmetatable(self) or self
-    local superclass = getmetatable(class)
+    local class = self.__is_instance and oop.get_class(self) or self
+    local superclass = oop.get_class(class)
     local proxy = { __ptr = self }
 
     function proxy:super()
@@ -103,11 +114,11 @@ end
 -- Therefore, with A -> B -> b, is_instance(b, A) == true.
 function oop.is_instance(obj, class)
     while obj ~= nil do
-        local mt = getmetatable(obj)
-        if mt == class then
+        local superclass = oop.get_class(obj)
+        if superclass == class then
             return true
         end
-        obj = mt
+        obj = superclass
     end
     return false
 end
@@ -124,6 +135,10 @@ function oop.add_attributes(obj, attrs)
     for k, v in pairs(attrs) do
         obj[k] = v
     end
+end
+
+function oop.property(fn)
+    return { __get = fn }
 end
 
 return oop
