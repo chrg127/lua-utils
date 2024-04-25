@@ -4,23 +4,25 @@ local fmt = require "fmt"
 -- declare a class:
 local A = Object:extend("A", { val = 42 })
 
--- A is defined as a table.
+-- A has been defined as a table.
 -- using the simple print() function will show that A is an instance of Object.
 -- using fmt's extended print, we can peek at the class's internals (show_ptr
 -- also prints the table's tostring()).
 -- in particular:
---     - all classes have a super() method, a __name key (used for instances, not
---       an actual attribute) and a __classname field (that will be what you
---       pass as the first argument to extend())
+--     - all instances have a __instname key (that will be what you pass as the
+--       first argument to extend()
+--     - all classes have a __name key (used by instances of the class) and a
+--       __call key (used by subclasses of the class)
 --     - the class A has a class attribute val. you can access this in methods
 --       either with self.val or A.val.
---     - extend is also where you should be defining "static" methods.
+--     - with extend() you can also define "static" methods. they can still be
+--       defined later anyway (same for attributes),
 fmt.pyprint_opts({ indent = 4, show_ptr = true }, "A =", A)
 
 -- declare a constructor
 function A:init(bar, greet)
-    -- here we can declare any attribute we want.
-    -- self will be set to a new instance.
+    -- self is set to a new instance of class A.
+    -- we can declare any attribute we want to put on it.
     self.foo = bar
     self.greet = greet
 end
@@ -30,12 +32,10 @@ local a = A(2, "hi")
 -- you can also say:
 local ab = oop.new(A, 3, "hii")
 
--- let's inspect this instance.
--- we find all attributes we declared in A:init(). we also find a __class key,
--- that points to the instance's class.
--- note that that __class key is the only real difference between objects created
--- with extend() and those created with classname(). this difference is important
--- when considering methods like super().
+-- let's inspect this instance. we find all attributes we declared in A:init(),
+-- plus the key __instname, set to just "A instance". the difference between a
+-- class and an instance of a class created with new() or class() is that
+-- classes have some structure (__name and __call) given to them by extend().
 fmt.pyprint_opts({ indent = 4, show_ptr = true }, "a =", a)
 
 -- declare a subclass of A
@@ -44,8 +44,9 @@ local B = A:extend("B", { qux = 64 })
 -- inspecting B shows that it's an instance of A, with a single class field 'qux'
 fmt.pyprint_opts({ indent = 4, show_ptr = true }, "B =", B)
 
--- you can, by the way, extend an object. this likely won't do any good for you,
--- so if this happens then a warning will be issued.
+-- you can, by the way, extend an object. while not terribly useful, aa does work
+-- as expected. however, you won't be able to create objects using aa() (you
+-- must use oop.new()).
 local aa = a:extend("aa")
 fmt.pyprint_opts({ indent = 4, show_ptr = true }, "aa =", aa)
 
@@ -57,34 +58,33 @@ end
 function B:print_foo()
     print("foo is")
     -- to call a superclass method, you must use this syntax:
-    self:super():print_foo()
-    -- super() is actually a method found on Object, therefore it can be called
-    -- on any instance of Object (i.e. any class)
+    self:super(A):print_foo()
+    -- super() is a method found on Object, therefore it can be called on any
+    -- object (including classes themselves).
     -- super() returns a proxy object that lets you access attributes and method
     -- of the superclass, but any method call will be done with self as the
-    -- original object
+    -- original object.
     -- as an example, this also works:
-    B:super():print_foo()
+    B:super(A):print_foo()
     -- and A:print_foo will be called with B as the self object, which in this
     -- example will print a nil value since B.foo doesn't exist.
     -- you can also do a normal function call and pass whatever you want as the
     -- self.this line is the same as self:super():print_foo()
-    B:super().print_foo(self)
+    B:super(A).print_foo(self)
 end
 
 -- a little note about constructors. if a constructor is not defined, the
 -- superclass's constructor will be used. if that is not defined, then the
--- superclass's subclass's will be used, and so on.
+-- superclass's superclass's will be used, and so on.
 -- defining a constructor however won't automatically call the others up in
 -- the chain. for that you must use super().
 function B:init(some_value)
-    self:super():init(1, "hello")
+    self:super(A):init(1, "hello")
     self.some_value = some_value
 end
 
 local b = B("some_value")
-
-b:print_foo()
+b:print_foo() -- prints 1, nil, 1
 
 -- operator overriding works as expected.
 -- here's a simple vector class:
@@ -113,7 +113,7 @@ local v3 = v2 * 3
 print(v3.x, v3.y) -- prints 27 27
 
 -- you can get an object's class directly using get_class:
-fmt.pyprint(oop.get_class(a))
+fmt.pyprint("class of a =", oop.get_class(a).__instname)
 
 -- the library provides an is_instance function.
 -- it will check if the provided object is an instance of a class, following

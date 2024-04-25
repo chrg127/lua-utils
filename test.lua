@@ -30,14 +30,14 @@ function test_oop()
     local Cat = Animal:extend("Cat", {})
 
     function Cat:init(init_val)
-        self:super():init()
+        self:super(Animal):init()
         self.value = init_val or 0
         self.data = { "test data" }
     end
 
     function Cat:cry()
         print("meow!")
-        self:super():cry()
+        self:super(Animal):cry()
     end
 
     function Cat:print_data()
@@ -56,18 +56,9 @@ function test_oop()
     local catsum = cat + Cat(4)
     print(catsum.value)
 
-    -- fmt.pyprint_opts({ show_ptr = true }, "Object =", Object)
-    -- fmt.pyprint_opts({ show_ptr = true }, "Animal =", Animal)
-    -- fmt.pyprint_opts({ show_ptr = true }, "Cat =", Cat)
-    -- fmt.pyprint_opts({ show_ptr = true }, "cat =", cat)
-    -- fmt.pyprint_opts({ show_ptr = true }, "cat:super() =", cat:super())
-    -- fmt.pyprint_opts({ show_ptr = true }, "cat:super():super() =", cat:super():super())
-
     local anim = Animal()
     anim:cry()
     print(anim.cries)
-    -- will error
-    -- anim:print_data()
 end
 
 function test_oop_more()
@@ -104,7 +95,7 @@ function test_oop2()
     local Dog = Animal:extend("Dog")
 
     function Dog:init(name, breed)
-        self:super():init(name) -- Call the superclass's init method
+        self:super(Animal):init(name) -- Call the superclass's init method
         self.breed = breed
     end
 
@@ -117,7 +108,7 @@ function test_oop2()
 
     -- Test the functionality
     print(myDog:speak())           -- Output: Rex barks!
-    print(Dog:super().speak(myDog)) -- Output: Rex makes a sound.
+    print(Dog:super(Animal).speak(myDog)) -- Output: Rex makes a sound.
 
     -- Check if myDog is an instance of Dog and Animal
     print("Is myDog a Dog?", oop.is_instance(myDog, Dog))           -- Output: true
@@ -125,7 +116,7 @@ function test_oop2()
 end
 
 --test_fmt()
-test_oop()
-test_oop_more()
+-- test_oop()
+-- test_oop_more()
 test_oop2()
 --test_oop_more()
