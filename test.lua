@@ -115,8 +115,7 @@ function test_oop2()
     print("Is myDog an Animal?", oop.is_instance(myDog, Animal))    -- Output: true
 end
 
---test_fmt()
--- test_oop()
--- test_oop_more()
+test_fmt()
+test_oop()
+test_oop_more()
 test_oop2()
---test_oop_more()

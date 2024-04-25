@@ -33,9 +33,10 @@ local a = A(2, "hi")
 local ab = oop.new(A, 3, "hii")
 
 -- let's inspect this instance. we find all attributes we declared in A:init(),
--- plus the key __instname, set to just "A instance". the difference between a
--- class and an instance of a class created with new() or class() is that
--- classes have some structure (__name and __call) given to them by extend().
+-- plus the key __instname, set to just "A instance" (as well a funny name for
+-- __name, will be explained later). the difference between a class and an
+-- instance of a class created with new() or class() is that classes have some
+-- structure (__index and __call) given to them by extend().
 fmt.pyprint_opts({ indent = 4, show_ptr = true }, "a =", a)
 
 -- declare a subclass of A

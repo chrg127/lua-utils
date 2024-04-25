@@ -40,15 +40,15 @@ end
 
 -- Creates a new object, which will be an instance of 'class'.
 --
---    +--------------+       +---------------------------+
---    |    object    |------>|     @class (metatable)    |
---    +--------------+       +---------------------------+
---    | (attributes) |       | __instname = "class"      |
---    +--------------+       | __name = "class instance" |
---                           | __call = oop.new          |
---                           | __index = oop.get_attr    |
---                           | (methods, operators)      |
---                           +---------------------------+
+--    +-------------------------------+       +---------------------------+
+--    |    object                     |------>|     @class (metatable)    |
+--    +-------------------------------+       +---------------------------+
+--    | __instname = "class instance" |       | __instname = "class"      |
+--    | __name = "class instance ..." |       | __name = "class instance" |
+--    | (other attributes)            |       | __call = oop.new          |
+--    +-------------------------------+       | __index = oop.get_attr    |
+--                                            | (methods, operators)      |
+--                                            +---------------------------+
 --
 -- An init method is called if found. By default it searches the entire chain
 -- and stops when it finds one defined (if found). Only the first init() method
@@ -67,7 +67,8 @@ end
 
 -- Base object from which to create new instances. It contains nothing except
 -- basic information found in every class.
--- It's metatable is not a class and is only used for print functionality.
+-- It's metatable is not a class and is only used for print functionality and
+-- for allowing Object().
 -- It's not marked 'local' so it can be used without putting 'oop.' as a prefix.
 -- It's still exported under 'oop' nonetheless.
 Object = {
@@ -76,7 +77,7 @@ Object = {
     __index = oop.get_attr,
     __call = oop.new
 }
-setmetatable(Object, { __name = "Object" })
+setmetatable(Object, { __name = "Object", __call = oop.new })
 oop.Object = Object
 
 -- extend() is used to create new classes. Formally, a new object is created
