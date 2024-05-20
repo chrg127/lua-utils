@@ -99,24 +99,16 @@ function fmt.parse_format_string(s)
     function arg_pos() return collect_num() end
 
     function align()
-        advance()
-        local possible_fill = prev
-        if match(">") or match("<") or match("=") then
-            return possible_fill, prev
+        fmt.pyprint("prev =", prev, "cur =", cur)
+        local next_char = string.char(s:byte(i+1))
+        if next_char == ">" or next_char == "<" or next_char == "=" then
+            advance()
+            return prev, cur
         end
-        if prev == ">" or prev == "<" or prev == "=" then
+        if match(">") or match("<") or match("=") then
             return " ", prev
         end
         return " ", nil
-    end
-
-    function sign(check_prev)
-        if not check_prev and match("+") or match("-") or match(" ") then
-            return prev
-        elseif prev == "+" or prev == "-" or prev == " " then
-            return prev
-        end
-        return nil
     end
 
     -- also handle {} ?
@@ -160,10 +152,7 @@ function fmt.parse_format_string(s)
         print("cur =", cur, "prev =", prev)
         r.fill, r.align  = align()
         print("cur =", cur, "prev =", prev)
-        -- because align() advance()'es even if no fill and align exist,
-        -- when parsing the sign we have to check prev or cur based on
-        -- the result of align()
-        r.sign           = sign(fill == nil and align == nil)
+        r.sign           = (match("+") or match("-") or match(" ")) and prev or nil
         r.alternate_conv = match("#")
         print("cur =", cur, "prev =", prev)
         r.zero_pad       = match("0")
