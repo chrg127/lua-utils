@@ -1,5 +1,7 @@
 local fmt = {}
 
+local math = require "math"
+
 local pack = table.pack or function(...)
     return { n = select('#', ...), ... }
 end
@@ -51,6 +53,16 @@ end
 function fmt.pystr(...) return fmt.pystr_opts(nil, ...) end
 function fmt.pyprint(...) return fmt.pyprint_opts(nil, ...) end
 
+function fmt.bin(n)
+    local s = ""
+    while n > 0 do
+        local digit = n % 2
+        s = tostring(digit) .. s
+        n = math.floor(n / 2)
+    end
+    return s
+end
+
 -- replacement_field ::=  "{" [arg_pos] [":" format_spec] "}"
 -- arg_pos           ::=  [digit+]
 -- format_spec       ::=  [[fill]align][sign]["#"]["0"][width][grouping_option]["." precision][type]
@@ -99,13 +111,12 @@ function fmt.parse_format_string(s)
     function arg_pos() return collect_num() end
 
     function align()
-        fmt.pyprint("prev =", prev, "cur =", cur)
-        local next_char = string.char(s:byte(i+1))
-        if next_char == ">" or next_char == "<" or next_char == "=" then
+        local nextc = string.char(s:byte(i+1))
+        if nextc == ">" or nextc == "<" or nextc == "=" or nextc == "^" then
             advance()
             return prev, cur
         end
-        if match(">") or match("<") or match("=") then
+        if match(">") or match("<") or match("=") or match("^") then
             return " ", prev
         end
         return " ", nil
@@ -137,8 +148,8 @@ function fmt.parse_format_string(s)
         elseif match("o") then return "octal"
         elseif match("x") then return "hex", "lower"
         elseif match("X") then return "hex", "upper"
-        elseif match("e") then return "exp", "lower"
-        elseif match("E") then return "exp", "upper"
+        elseif match("e") then return "scientific", "lower"
+        elseif match("E") then return "scientific", "upper"
         elseif match("f") then return "fixed", "lower"
         elseif match("F") then return "fixed", "upper"
         elseif match("g") then return "general", "lower"
@@ -149,14 +160,10 @@ function fmt.parse_format_string(s)
 
     function format_spec()
         local r = {}
-        print("cur =", cur, "prev =", prev)
         r.fill, r.align  = align()
-        print("cur =", cur, "prev =", prev)
         r.sign           = (match("+") or match("-") or match(" ")) and prev or nil
         r.alternate_conv = match("#")
-        print("cur =", cur, "prev =", prev)
         r.zero_pad       = match("0")
-        print("cur =", cur, "prev =", prev)
         r.width          = width()
         r.group_opt      = group_opt()
         r.precision      = match(".") and precision() or nil
@@ -184,11 +191,44 @@ function fmt.parse_format_string(s)
     return r, i
 end
 
+function format_num(spec, num)
+    if spec.typ == "decimal" then
+        return tostring(num)
+    elseif spec.typ == "hex" then
+        local s = string.format(spec.case == "upper" and "%X" or "%x", num)
+        return (spec.alternate_conv and spec.case == "upper") and "0X" .. s
+            or (spec.alternate_conv)                          and "0x" .. s
+            or s
+    elseif spec.typ == "binary" then
+        local s = fmt.bin(num)
+        return spec.alternate_conv and "0b" .. s or s
+    elseif spec.typ == "octal" then
+        local s = string.format("%o", num)
+        return (spec.alternate_conv and spec.case == "upper") and "0O" .. s
+            or (spec.alternate_conv)                          and "0o" .. s
+            or s
+    elseif spec.typ == "fixed" then
+        return (spec.case == "upper" and math.is_nan(num)) and "NAN"
+            or (spec.case == "upper" and math.is_inf(num)) and "INF"
+            or string.format("%." .. (spec.precision == nil and 6 or spec.precision) .. "f", num)
+    elseif spec.typ == "percent" then
+        return (spec.case == "upper" and math.is_nan(num)) and "NAN"
+            or (spec.case == "upper" and math.is_inf(num)) and "INF"
+            or string.format("%." .. (spec.precision == nil and 6 or spec.precision) .. "f", num * 100)
+    elseif spec.typ == "scientific" then
+        local fmtstr = "%" .. (spec.precision == nil and "" or "." .. spec.precision)
+                           .. (spec.case == "upper" and "E" or "e")
+        return string.format(fmtstr, num)
+    else
+        return tostring(num)
+    end
+end
+
 function format_arg(spec, arg)
     if spec == nil then
         return fmt.pystr(arg)
     end
-    local s = fmt.pystr(type(arg) == "number" and math.abs(arg) or arg)
+    local s = type(arg) == "number" and format_num(spec, math.abs(arg)) or fmt.pystr(arg)
     if spec.precision ~= nil then
         if type(arg) == "string" then
             s = s:sub(spec.precision)
@@ -200,6 +240,7 @@ function format_arg(spec, arg)
         error("sign can't be used with number arguments")
     end
     local sign = type(arg) ~= "number" and ""
+              or spec.typ == "percent" and ""
               or spec.sign == "+" and (arg < 0 and "-" or "+")
               or spec.sign == " " and (arg < 0 and "-" or " ")
               or (arg < 0 and "-" or "")
