@@ -215,7 +215,11 @@ function format_num(spec, num)
                                  .. "." .. (spec.precision == nil and 6 or spec.precision)
                                  .. "f", num)
     elseif spec.typ == "general" then
-        -- ughh...
+        return (spec.case == "upper" and math.is_nan(num)) and "NAN"
+            or (spec.case == "upper" and math.is_inf(num)) and "INF"
+            or string.format("%" .. (spec.alternate_conv and "#" or "")
+                                 .. "." .. (spec.precision == nil and 6 or spec.precision)
+                                 .. (spec.case == "upper" and "G" or "g"), num)
     elseif spec.typ == "percent" then
         spec.typ = "fixed"
         return format_num(num * 100) .. "%"
