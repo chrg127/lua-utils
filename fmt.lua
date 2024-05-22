@@ -192,35 +192,51 @@ function fmt.parse_format_string(s)
 end
 
 function format_num(spec, num)
-    if spec.typ == "decimal" then
+    function prefix(if_upper, if_lower)
+        return (spec.alternate_conv and spec.case == "upper") and if_upper
+            or  spec.alternate_conv and if_lower or ""
+    end
+    if spec.typ == nil or spec.typ == "decimal" then
         return tostring(num)
-    elseif spec.typ == "hex" then
-        local s = string.format(spec.case == "upper" and "%X" or "%x", num)
-        return (spec.alternate_conv and spec.case == "upper") and "0X" .. s
-            or (spec.alternate_conv)                          and "0x" .. s
-            or s
     elseif spec.typ == "binary" then
-        local s = fmt.bin(num)
-        return spec.alternate_conv and "0b" .. s or s
+        return prefix("0B", "0b") .. fmt.bin(num)
+    elseif spec.typ == "hex" then
+         return prefix("0X", "0x") .. string.format(spec.case == "upper" and "%X" or "%x", num)
     elseif spec.typ == "octal" then
-        local s = string.format("%o", num)
-        return (spec.alternate_conv and spec.case == "upper") and "0O" .. s
-            or (spec.alternate_conv)                          and "0o" .. s
-            or s
+        return prefix("0O", "0o") .. string.format("%o", num)
+    elseif spec.typ == "scientific" then
+        return string.format("%" .. (spec.alternate_conv and "#" or "")
+                                 .. "." .. (spec.precision == nil and 6 or spec.precision)
+                                 .. (spec.case == "upper" and "E" or "e"), num)
     elseif spec.typ == "fixed" then
         return (spec.case == "upper" and math.is_nan(num)) and "NAN"
             or (spec.case == "upper" and math.is_inf(num)) and "INF"
-            or string.format("%." .. (spec.precision == nil and 6 or spec.precision) .. "f", num)
+            or string.format("%" .. (spec.alternate_conv and "#" or "")
+                                 .. "." .. (spec.precision == nil and 6 or spec.precision)
+                                 .. "f", num)
+    elseif spec.typ == "general" then
+        -- ughh...
     elseif spec.typ == "percent" then
-        return (spec.case == "upper" and math.is_nan(num)) and "NAN"
-            or (spec.case == "upper" and math.is_inf(num)) and "INF"
-            or string.format("%." .. (spec.precision == nil and 6 or spec.precision) .. "f", num * 100)
-    elseif spec.typ == "scientific" then
-        local fmtstr = "%" .. (spec.precision == nil and "" or "." .. spec.precision)
-                           .. (spec.case == "upper" and "E" or "e")
-        return string.format(fmtstr, num)
+        spec.typ = "fixed"
+        return format_num(num * 100) .. "%"
     else
-        return tostring(num)
+        return error("unknown format " .. spec.typ .. " for number")
+    end
+end
+
+function format_string(spec, arg)
+    if spec.typ == "string" or spec.typ == nil then
+        return arg:sub(spec.precision)
+    else
+        error("invalid format '" .. spec.typ .. "' for object of type 'string'")
+    end
+end
+
+function format_char(arg)
+    if arg < 0 then
+        error("character code out of range: " .. num)
+    else
+        return arg
     end
 end
 
@@ -228,24 +244,25 @@ function format_arg(spec, arg)
     if spec == nil then
         return fmt.pystr(arg)
     end
-    local s = type(arg) == "number" and format_num(spec, math.abs(arg)) or fmt.pystr(arg)
-    if spec.precision ~= nil then
-        if type(arg) == "string" then
-            s = s:sub(spec.precision)
-        else
-            error("when using precision, type of argument must be string or number with type f/F")
-        end
+    local arg_type = type(arg)
+    if spec.typ ~= nil and arg_type ~= "number" and arg_type ~= "string" then
+        error("invalid format '" .. spec.typ .. "' for object of type " .. arg_type)
     end
+    local s = spec.typ == "char" and format_char(arg)
+           or arg_type == "number" and format_num(spec, math.abs(arg))
+           or arg_type == "string" and format_string(spec, arg)
+           or fmt.pystr(arg)
     if type(arg) ~= "number" and spec.sign ~= nil then
-        error("sign can't be used with number arguments")
+        error("sign can't be used with non-number arguments")
     end
     local sign = type(arg) ~= "number" and ""
               or spec.typ == "percent" and ""
+              or spec.typ == "char" and ""
               or spec.sign == "+" and (arg < 0 and "-" or "+")
               or spec.sign == " " and (arg < 0 and "-" or " ")
               or (arg < 0 and "-" or "")
     if spec.align == nil then
-        spec.align = type(arg) == "number" and ">" or "<"
+        spec.align = arg_type == "number" and ">" or "<"
     end
     if spec.align == "<" then
         s = sign .. s .. string.rep(spec.fill, spec.width - #s - #sign)
@@ -258,7 +275,7 @@ function format_arg(spec, arg)
         s = sign .. string.rep(spec.fill, spec.width - #s - #sign) .. s
     end
     return s
-    -- missing: #, group_opt, support for actual types
+    -- missing: group_opt, g type
 end
 
 function fmt.pyformat(fmtstr, ...)
