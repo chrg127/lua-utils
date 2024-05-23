@@ -6,11 +6,11 @@ local pack = table.pack or function(...)
     return { n = select('#', ...), ... }
 end
 
-local function spaces(opts)
-    return string.rep(" ", (opts.indent or 0) * (opts.depth or 1))
-end
-
 function fmt.format_table(t, opts)
+    function spaces(opts)
+        return string.rep(" ", (opts.indent or 0) * (opts.depth or 1))
+    end
+
     opts = opts or {}
     opts.indent = opts.indent or 0
     opts.depth = opts.depth or 0
@@ -65,15 +65,14 @@ end
 
 -- replacement_field ::=  "{" [arg_pos] [":" format_spec] "}"
 -- arg_pos           ::=  [digit+]
--- format_spec       ::=  [[fill]align][sign]["#"]["0"][width][grouping_option]["." precision][type]
+-- format_spec       ::=  [[fill]align][sign]["#"]["0"][width]["." precision][type]
 -- fill              ::=  <any character>
 -- align             ::=  "<" | ">" | "=" | "^"
 -- sign              ::=  "+" | "-" | " "
 -- width             ::=  digit+
--- grouping_option   ::=  "_" | ","
 -- precision         ::=  digit+
 -- type              ::=  "b" | "c" | "d" | "e" | "E" | "f" | "F" | "g" | "G" | "o" | "s" | "x" | "X" | "%"
-function fmt.parse_format_string(s)
+local function parse_format_string(s)
     local i = 1
     local prev, cur = "", string.char(s:byte(i))
 
@@ -114,6 +113,7 @@ function fmt.parse_format_string(s)
         local nextc = string.char(s:byte(i+1))
         if nextc == ">" or nextc == "<" or nextc == "=" or nextc == "^" then
             advance()
+            advance()
             return prev, cur
         end
         if match(">") or match("<") or match("=") or match("^") then
@@ -122,7 +122,6 @@ function fmt.parse_format_string(s)
         return " ", nil
     end
 
-    -- also handle {} ?
     function width()
         local n = collect_num()
         return n == nil and 0 or n
@@ -155,7 +154,7 @@ function fmt.parse_format_string(s)
         elseif match("g") then return "general", "lower"
         elseif match("G") then return "general", "upper"
         elseif match("%") then return "percent"
-        else                   return "char" end
+        else                   return nil end
     end
 
     function format_spec()
@@ -191,7 +190,7 @@ function fmt.parse_format_string(s)
     return r, i
 end
 
-function format_num(spec, num)
+local function format_num(spec, num)
     function prefix(if_upper, if_lower)
         return (spec.alternate_conv and spec.case == "upper") and if_upper
             or  spec.alternate_conv and if_lower or ""
@@ -228,7 +227,7 @@ function format_num(spec, num)
     end
 end
 
-function format_string(spec, arg)
+local function format_string(spec, arg)
     if spec.typ == "string" or spec.typ == nil then
         return arg:sub(spec.precision)
     else
@@ -236,15 +235,15 @@ function format_string(spec, arg)
     end
 end
 
-function format_char(arg)
+local function format_char(arg)
     if arg < 0 then
         error("character code out of range: " .. num)
     else
-        return arg
+        return utf8.char(arg)
     end
 end
 
-function format_arg(spec, arg)
+local function format_arg(spec, arg)
     if spec == nil then
         return fmt.pystr(arg)
     end
@@ -279,7 +278,6 @@ function format_arg(spec, arg)
         s = sign .. string.rep(spec.fill, spec.width - #s - #sign) .. s
     end
     return s
-    -- missing: group_opt, g type
 end
 
 function fmt.pyformat(fmtstr, ...)
@@ -297,7 +295,7 @@ function fmt.pyformat(fmtstr, ...)
 
     while i <= #fmtstr do
         if fmtstr:byte(i) == string.byte("{") then
-            local parse_data, new_i = fmt.parse_format_string(fmtstr:sub(i))
+            local parse_data, new_i = parse_format_string(fmtstr:sub(i))
             res = res .. format_arg(parse_data.spec, args[get_pos(parse_data.pos, n)])
             i = new_i
             n = n + 1
