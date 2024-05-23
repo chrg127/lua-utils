@@ -113,8 +113,9 @@ local function parse_format_string(s)
         local nextc = string.char(s:byte(i+1))
         if nextc == ">" or nextc == "<" or nextc == "=" or nextc == "^" then
             advance()
+            local fill = prev
             advance()
-            return prev, cur
+            return fill, prev
         end
         if match(">") or match("<") or match("=") or match("^") then
             return " ", prev
@@ -123,11 +124,21 @@ local function parse_format_string(s)
     end
 
     function width()
+        if match("{") then
+            local pos = arg_pos()
+            consume("}")
+            return { pos = pos }
+        end
         local n = collect_num()
         return n == nil and 0 or n
     end
 
     function precision()
+        if match("{") then
+            local pos = arg_pos()
+            consume("}")
+            return { pos = pos }
+        end
         return collect_num()
     end
 
@@ -186,7 +197,6 @@ local function parse_format_string(s)
     end
 
     local r = replacement_field()
-    fmt.pyprint("r =", r)
     return r, i
 end
 
@@ -283,22 +293,35 @@ end
 function fmt.pyformat(fmtstr, ...)
     local args, res, n, i = pack(...), "", 1, 1
 
-    function get_pos(pos, n)
+    function get_arg(args, pos)
         if pos ~= nil then
             if pos < 1 or pos > #args then
                 error("positional argument out of range")
             end
-            return pos
+            return args[pos]
         end
-        return n
+        n = n + 1
+        return args[n-1]
     end
 
     while i <= #fmtstr do
         if fmtstr:byte(i) == string.byte("{") then
             local parse_data, new_i = parse_format_string(fmtstr:sub(i))
-            res = res .. format_arg(parse_data.spec, args[get_pos(parse_data.pos, n)])
+            if type(parse_data.spec.width) == "table" then
+                parse_data.spec.width = get_arg(args, parse_data.spec.width.pos)
+                if type(parse_data.spec.width) ~= "number" then
+                    error("width must be a number")
+                end
+            end
+            if type(parse_data.spec.precision) == "table" then
+                parse_data.spec.precision = get_arg(args, parse_data.spec.precision.pos)
+                if type(parse_data.spec.precision) ~= "number" then
+                    error("precision must be a number")
+                end
+            end
+            fmt.pyprint("r =", parse_data)
+            res = res .. format_arg(parse_data.spec, get_arg(args, parse_data.pos))
             i = new_i
-            n = n + 1
         else
             res = res .. string.char(fmtstr:byte(i))
         end
