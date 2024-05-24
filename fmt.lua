@@ -76,40 +76,46 @@ local function parse_format_string(s)
     local i = 1
     local prev, cur = "", string.char(s:byte(i))
 
-    function advance()
+    local function advance()
         i = i + 1
         prev = cur
         cur = string.char(s:byte(i))
     end
 
-    function consume(c)
-        if cur == c then
-            advance()
-            return
-        end
-        error("error: can't consume " .. c)
-    end
-
-    function match(c)
+    local function consume(c, error_string)
         if cur ~= c then
-            return false
+            error(error_string)
         end
         advance()
-        return true
     end
 
-    function collect_num()
+    local function match(c)
+        if cur == c then
+            advance()
+            return true
+        end
+        return false
+    end
+
+    local function collect_num(fail_val)
         local num = ""
         while cur >= "0" and cur <= "9" do
             num = num .. cur
             advance()
         end
-        return tonumber(num)
+        local n = tonumber(num)
+        return n == nil and fail_val or n
     end
 
-    function arg_pos() return collect_num() end
+    local function arg_pos() return collect_num() end
 
-    function align()
+    local function argument()
+        local pos = arg_pos()
+        consume("}")
+        return { pos = pos }
+    end
+
+    local function align()
         local nextc = string.char(s:byte(i+1))
         if nextc == ">" or nextc == "<" or nextc == "=" or nextc == "^" then
             advance()
@@ -123,33 +129,15 @@ local function parse_format_string(s)
         return " ", nil
     end
 
-    function width()
-        if match("{") then
-            local pos = arg_pos()
-            consume("}")
-            return { pos = pos }
-        end
-        local n = collect_num()
-        return n == nil and 0 or n
+    local function width()
+        return match("{") and argument() or collect_num(0)
     end
 
-    function precision()
-        if match("{") then
-            local pos = arg_pos()
-            consume("}")
-            return { pos = pos }
-        end
-        return collect_num()
+    local function precision()
+        return match("{") and argument() or collect_num()
     end
 
-    function group_opt()
-        if match("_") or match(",") then
-            return prev
-        end
-        return nil
-    end
-
-    function typ()
+    local function typ()
             if match("s") then return "string"
         elseif match("?") then return "debug"
         elseif match("c") then return "char"
@@ -168,160 +156,171 @@ local function parse_format_string(s)
         else                   return nil end
     end
 
-    function format_spec()
+    local function format_spec()
         local r = {}
         r.fill, r.align  = align()
         r.sign           = (match("+") or match("-") or match(" ")) and prev or nil
         r.alternate_conv = match("#")
         r.zero_pad       = match("0")
         r.width          = width()
-        r.group_opt      = group_opt()
         r.precision      = match(".") and precision() or nil
         r.typ, r.case    = typ()
-        if r.zero_pad and r.align == nil and r.fill == " " then
-            r.align = "="
-            r.fill = "0"
-        end
         return r
     end
 
-    function replacement_field()
-        consume("{")
+    local function replacement_field()
+        consume("{", "expected { at start of format string")
         local r = {}
-        r.pos = arg_pos()
-        if match(":") then
-            r.spec = format_spec()
-        end
-        consume("}")
-        return r
+        local pos = arg_pos()
+        local spec = match(":") and format_spec() or {
+            fill = " ", width = 0, alternate_conv = false
+        }
+        spec.pos = pos
+        consume("}", "expected } before end of format string, found " .. cur .. " instead")
+        return spec
     end
 
     local r = replacement_field()
     return r, i
 end
 
-local function format_num(spec, num)
-    function prefix(if_upper, if_lower)
-        return (spec.alternate_conv and spec.case == "upper") and if_upper
-            or  spec.alternate_conv and if_lower or ""
-    end
-    if spec.typ == nil or spec.typ == "decimal" then
-        return tostring(num)
-    elseif spec.typ == "binary" then
-        return prefix("0B", "0b") .. fmt.bin(num)
-    elseif spec.typ == "hex" then
-         return prefix("0X", "0x") .. string.format(spec.case == "upper" and "%X" or "%x", num)
-    elseif spec.typ == "octal" then
-        return prefix("0O", "0o") .. string.format("%o", num)
-    elseif spec.typ == "scientific" then
-        return string.format("%" .. (spec.alternate_conv and "#" or "")
-                                 .. "." .. (spec.precision == nil and 6 or spec.precision)
-                                 .. (spec.case == "upper" and "E" or "e"), num)
-    elseif spec.typ == "fixed" then
-        return (spec.case == "upper" and math.is_nan(num)) and "NAN"
-            or (spec.case == "upper" and math.is_inf(num)) and "INF"
-            or string.format("%" .. (spec.alternate_conv and "#" or "")
-                                 .. "." .. (spec.precision == nil and 6 or spec.precision)
-                                 .. "f", num)
-    elseif spec.typ == "general" then
-        return (spec.case == "upper" and math.is_nan(num)) and "NAN"
-            or (spec.case == "upper" and math.is_inf(num)) and "INF"
-            or string.format("%" .. (spec.alternate_conv and "#" or "")
-                                 .. "." .. (spec.precision == nil and 6 or spec.precision)
-                                 .. (spec.case == "upper" and "G" or "g"), num)
-    elseif spec.typ == "percent" then
-        spec.typ = "fixed"
-        return format_num(num * 100) .. "%"
-    else
-        return error("unknown format " .. spec.typ .. " for number")
-    end
-end
-
-local function format_string(spec, arg)
-    if spec.typ == "string" or spec.typ == nil then
-        return arg:sub(spec.precision)
-    else
-        error("invalid format '" .. spec.typ .. "' for object of type 'string'")
-    end
-end
-
-local function format_char(arg)
-    if arg < 0 then
-        error("character code out of range: " .. num)
-    else
-        return utf8.char(arg)
-    end
-end
-
-local function format_arg(spec, arg)
-    if spec == nil then
-        return fmt.pystr(arg)
-    end
-    local arg_type = type(arg)
-    if spec.typ ~= nil and arg_type ~= "number" and arg_type ~= "string" then
-        error("invalid format '" .. spec.typ .. "' for object of type " .. arg_type)
-    end
-    local s = spec.typ == "char" and format_char(arg)
-           or arg_type == "number" and format_num(spec, math.abs(arg))
-           or arg_type == "string" and format_string(spec, arg)
-           or fmt.pystr(arg)
-    if type(arg) ~= "number" and spec.sign ~= nil then
-        error("sign can't be used with non-number arguments")
-    end
-    local sign = type(arg) ~= "number" and ""
-              or spec.typ == "percent" and ""
-              or spec.typ == "char" and ""
-              or spec.sign == "+" and (arg < 0 and "-" or "+")
-              or spec.sign == " " and (arg < 0 and "-" or " ")
-              or (arg < 0 and "-" or "")
-    if spec.align == nil then
-        spec.align = arg_type == "number" and ">" or "<"
-    end
-    if spec.align == "<" then
-        s = sign .. s .. string.rep(spec.fill, spec.width - #s - #sign)
-    elseif spec.align == ">" then
-        s = string.rep(spec.fill, spec.width - #s - #sign) .. sign .. s
-    elseif spec.align == "^" then
-        local fill = string.rep(spec.fill, (spec.width - #s - #sign)/2)
-        s = fill .. sign .. s .. fill
-    elseif spec.align == "=" then
-        s = sign .. string.rep(spec.fill, spec.width - #s - #sign) .. s
-    end
-    return s
-end
-
 function fmt.pyformat(fmtstr, ...)
     local args, res, n, i = pack(...), "", 1, 1
 
-    function get_arg(args, pos)
+    local function format_num(spec, num)
+        function prefix(if_upper, if_lower)
+            return (spec.alternate_conv and spec.case == "upper") and if_upper
+                or  spec.alternate_conv and if_lower or ""
+        end
+        if spec.precision ~= nil and spec.typ ~= nil and spec.typ ~= "scientific"
+            and spec.typ ~= "fixed" and spec.typ ~= "general" then
+            error("precision not allowed in format specifier '" .. spec.typ .. "'")
+        end
+        if spec.typ == "decimal" then
+            return tostring(num)
+        elseif spec.typ == "binary" then
+            return prefix("0B", "0b") .. fmt.bin(num)
+        elseif spec.typ == "hex" then
+             return prefix("0X", "0x") .. string.format(spec.case == "upper" and "%X" or "%x", num)
+        elseif spec.typ == "octal" then
+            return prefix("0O", "0o") .. string.format("%o", num)
+        elseif spec.typ == "scientific" then
+            return string.format("%" .. (spec.alternate_conv and "#" or "")
+                                     .. "." .. (spec.precision == nil and 6 or spec.precision)
+                                     .. (spec.case == "upper" and "E" or "e"), num)
+        elseif spec.typ == "fixed" then
+            return (spec.case == "upper" and math.is_nan(num)) and "NAN"
+                or (spec.case == "upper" and math.is_inf(num)) and "INF"
+                or string.format("%" .. (spec.alternate_conv and "#" or "")
+                                     .. "." .. (spec.precision == nil and 6 or spec.precision)
+                                     .. "f", num)
+        elseif spec.typ == "general" or spec.typ == nil then
+            return (spec.case == "upper" and math.is_nan(num)) and "NAN"
+                or (spec.case == "upper" and math.is_inf(num)) and "INF"
+                or string.format("%" .. (spec.alternate_conv and "#" or "")
+                                     .. "." .. (spec.precision == nil and 6 or spec.precision)
+                                     .. (spec.case == "upper" and "G" or "g"), num)
+        elseif spec.typ == "percent" then
+            spec.typ = "fixed"
+            return format_num(num * 100) .. "%"
+        else
+            return error("unknown format " .. spec.typ .. " for argument '" .. num .. "' of type 'number'")
+        end
+    end
+
+    local function format_string(spec, arg)
+        if spec.typ == "string" or spec.typ == nil then
+            return arg:sub(spec.precision == nil and 0 or spec.precision)
+        else
+            error("invalid format '" .. spec.typ .. "' for argument '" .. arg .. "' of type 'string'")
+        end
+    end
+
+    local function format_char(arg)
+        if arg < 0 then
+            error("character code out of range: " .. num)
+        else
+            return utf8.char(arg)
+        end
+    end
+
+    -- this is an extension
+    local function format_table(spec, arg)
+        return fmt.format_table(arg, spec.alternate_conv
+            and { indent = spec.width == 0 and 4 or spec.width }
+            or  {})
+    end
+
+    local function format_arg(spec, arg)
+        local arg_type = type(arg)
+        if spec.typ ~= nil and arg_type ~= "number" and arg_type ~= "string" then
+            error("invalid format '" .. spec.typ .. "' for argument '" .. arg .. "' of type '" .. arg_type .. "'")
+        end
+        local s = spec.typ == "char" and format_char(arg)
+               or arg_type == "number" and format_num(spec, math.abs(arg))
+               or arg_type == "string" and format_string(spec, arg)
+               or arg_type == "table" and format_table(spec, arg)
+               or fmt.pystr(arg)
+        if spec.sign ~= nil and arg_type ~= "number" then
+            error("sign can't be used with argument '" .. arg .. "' of type '" .. arg_type .. "'")
+        end
+        local sign = arg_type ~= "number" and ""
+                  or spec.typ == "percent" and ""
+                  or spec.typ == "char" and ""
+                  or spec.sign == "+" and (arg < 0 and "-" or "+")
+                  or spec.sign == " " and (arg < 0 and "-" or " ")
+                  or (arg < 0 and "-" or "")
+        spec.fill = (spec.zero_pad and spec.fill == " ") and "0" or spec.fill
+        if spec.align == "=" and arg_type ~= "number" then
+            error("'=' alignment not allowed in argument '" .. arg .. "' of type '" .. arg_type .. "'")
+        end
+        spec.align = (spec.align == nil and arg_type == "number" and spec.zero_pad) and "="
+                  or (spec.align == nil and arg_type == "number") and ">"
+                  or spec.align == nil and "<" or spec.align
+        if spec.align == "<" then
+            return sign .. s .. string.rep(spec.fill, spec.width - #s - #sign)
+        elseif spec.align == ">" then
+            return string.rep(spec.fill, spec.width - #s - #sign) .. sign .. s
+        elseif spec.align == "^" then
+            local fill = string.rep(spec.fill, (spec.width - #s - #sign)//2)
+            return fill .. sign .. s .. fill
+        elseif spec.align == "=" then
+            return sign .. string.rep(spec.fill, spec.width - #s - #sign) .. s
+        end
+    end
+
+    local function get_arg(args, pos)
         if pos ~= nil then
             if pos < 1 or pos > #args then
                 error("positional argument out of range")
             end
             return args[pos]
+        else
+            n = n + 1
+            if n-1 > #args then
+                error("not enough arguments")
+            end
+            return args[n-1]
         end
-        n = n + 1
-        return args[n-1]
+    end
+
+    local function dependent_arg(arg, name)
+        if type(arg) == "table" then
+            arg = get_arg(args, spec.width.pos)
+            if type(arg) ~= "number" then
+                error(name .. " must be a number")
+            end
+        end
+        return arg
     end
 
     while i <= #fmtstr do
         if fmtstr:byte(i) == string.byte("{") then
-            local parse_data, new_i = parse_format_string(fmtstr:sub(i))
-            if type(parse_data.spec.width) == "table" then
-                parse_data.spec.width = get_arg(args, parse_data.spec.width.pos)
-                if type(parse_data.spec.width) ~= "number" then
-                    error("width must be a number")
-                end
-            end
-            if type(parse_data.spec.precision) == "table" then
-                parse_data.spec.precision = get_arg(args, parse_data.spec.precision.pos)
-                if type(parse_data.spec.precision) ~= "number" then
-                    error("precision must be a number")
-                end
-            end
-            fmt.pyprint("r =", parse_data)
-            res = res .. format_arg(parse_data.spec, get_arg(args, parse_data.pos))
-            i = new_i
+            local spec, index = parse_format_string(fmtstr:sub(i))
+            spec.width     = dependent_arg(spec.width, "width")
+            spec.precision = dependent_arg(spec.precision, "precision")
+            res = res .. format_arg(spec, get_arg(args, spec.pos))
+            i = index
         else
             res = res .. string.char(fmtstr:byte(i))
         end
