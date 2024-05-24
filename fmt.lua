@@ -1,6 +1,7 @@
 local fmt = {}
 
-local math = require "math"
+local function is_nan(n) return n ~= n end
+local function is_inf(n) return n == math.huge or n == -math.huge end
 
 local pack = table.pack or function(...)
     return { n = select('#', ...), ... }
@@ -209,14 +210,14 @@ function fmt.pyformat(fmtstr, ...)
                                      .. "." .. (spec.precision == nil and 6 or spec.precision)
                                      .. (spec.case == "upper" and "E" or "e"), num)
         elseif spec.typ == "fixed" then
-            return (spec.case == "upper" and math.is_nan(num)) and "NAN"
-                or (spec.case == "upper" and math.is_inf(num)) and "INF"
+            return (spec.case == "upper" and is_nan(num)) and "NAN"
+                or (spec.case == "upper" and is_inf(num)) and "INF"
                 or string.format("%" .. (spec.alternate_conv and "#" or "")
                                      .. "." .. (spec.precision == nil and 6 or spec.precision)
                                      .. "f", num)
         elseif spec.typ == "general" or spec.typ == nil then
-            return (spec.case == "upper" and math.is_nan(num)) and "NAN"
-                or (spec.case == "upper" and math.is_inf(num)) and "INF"
+            return (spec.case == "upper" and is_nan(num)) and "NAN"
+                or (spec.case == "upper" and is_inf(num)) and "INF"
                 or string.format("%" .. (spec.alternate_conv and "#" or "")
                                      .. "." .. (spec.precision == nil and 6 or spec.precision)
                                      .. (spec.case == "upper" and "G" or "g"), num)
