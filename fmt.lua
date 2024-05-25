@@ -1,3 +1,33 @@
+-- fmt.lua - v1.0 - https://github.com/chrg127/lua-utils
+-- no warranty implied, use at your own risk
+--
+-- This is a library for formatting and printing.
+--
+-- It is written in pure Lua and can be run in both PUC-Rio Lua and LuaJIT.
+--
+-- Notably, it provides print() and tostring() functions that correctly print
+-- table contents, styling them like so:
+--
+--     "{ [key1] = value1, [key2] = value2, ... }"
+--
+-- It also provides a format() function that is equivalent to python's format
+-- function (minus a few features, see the function's specific documentation).
+-- This format function also adds a way to format tables indented (an extension).
+--
+-- More details are provided in each functions's documentation.
+--
+-- HOW TO USE:
+--
+-- fmt = require "fmt"
+-- fmt.print(args...)                 -- for printing, same as lua print()
+-- fmt.tostring(args...)              -- stringify args, same as lua tostring()
+-- fmt.format_table(table, options?)  -- for formatting a table specifically
+-- fmt.print_opts(opts, args...)      -- print() with options
+-- fmt.tostring_opts(opts, args...)   -- tostring() with options
+-- fmt.bin(n)                         -- convert number to binary
+-- fmt.hex(n, upper)                  -- convert number to hex, lower or upper
+-- fmt.format(format_string, args...) -- for formatting to a string
+
 local fmt = {}
 
 local old_tostring = tostring
@@ -10,21 +40,27 @@ local pack = table.pack or function(...)
     return { n = select('#', ...), ... }
 end
 
+-- Formats a table `t` according to `opts`.
+-- `opts` can be either `nil` or a table containing these entries:
+--   - `indent` (number): indent size of a table.
+--                        0 (default) means don't indent.
+--   - `show_ptr` (bool): show table pointer according to `tostring(t)`.
+--                        Default is don't show.
 function fmt.format_table(t, opts)
     function spaces(opts)
-        return string.rep(" ", (opts.indent or 0) * (opts.depth or 1))
+        return string.rep(" ", (opts.indent or 0) * (opts._depth or 1))
     end
 
     opts = opts or {}
     opts.indent = opts.indent or 0
-    opts.depth = opts.depth or 0
+    opts._depth = opts._depth or 0
     local line_end = (opts.indent ~= 0 and "\n" or "")
     if next(t) == nil then
         return spaces(opts) .. "{}"
     end
     local s = (opts.show_ptr and old_tostring(t) .. " " or "")
             .. "{" .. line_end
-    opts.depth = opts.depth + 1
+    opts._depth = opts._depth + 1
     local ss = spaces(opts)
     for k, v in pairs(t) do
         local key = type(k) == "string"
@@ -34,10 +70,13 @@ function fmt.format_table(t, opts)
               .. ", " .. line_end
     end
     s = s:sub(1, -3) .. line_end
-    opts.depth = opts.depth - 1
+    opts._depth = opts._depth - 1
     return s .. spaces(opts) .. "}"
 end
 
+
+-- Same as `tostring`, except it takes an `opts` argument. `opts` is only valid
+-- fortables and works the same as `format_table`'s `opts` argument.
 function fmt.str_opts(opts, ...)
     local args = pack(...)
     local s = ""
@@ -49,10 +88,21 @@ function fmt.str_opts(opts, ...)
     return s:sub(1, -2)
 end
 
+-- Same as `print`, except it takes an `opts` argument. `opts` is only valid
+-- fortables and works the same as `format_table`'s `opts` argument.
 function fmt.print_opts(opts, ...) old_print(fmt.str_opts(opts, ...)) end
+
+-- Converts a variable number of arguments to a single string. Each argument
+-- is concatenated by a space.
+-- If an argument is not a table, it is converted using lua `tostring`.
+-- Otherwise it is converted using `format_table`.
 function fmt.tostring(...) return fmt.str_opts(nil, ...) end
+
+-- Prints a variable number of arguments using lua `print`. Conversion to
+-- string happens the same as `str_opts`.
 function fmt.print(...) return fmt.print_opts(nil, ...) end
 
+-- Converts a number to binary.
 function fmt.bin(n)
     local s = ""
     while n > 0 do
@@ -63,6 +113,8 @@ function fmt.bin(n)
     return s
 end
 
+-- Converts a number to hexadecimal. Defaults to printing letters in lowercase,
+-- unless `upper` is set to `true`.
 function fmt.hex(n, upper)
     local s = ""
     local t = upper and { "0", "1", "2", "3", "4", "5", "6", "7",
@@ -76,15 +128,6 @@ function fmt.hex(n, upper)
     return s
 end
 
--- replacement_field ::=  "{" [arg_pos] [":" format_spec] "}"
--- arg_pos           ::=  [digit+]
--- format_spec       ::=  [[fill]align][sign]["#"]["0"][width]["." precision][type]
--- fill              ::=  <any character>
--- align             ::=  "<" | ">" | "=" | "^"
--- sign              ::=  "+" | "-" | " "
--- width             ::=  digit+
--- precision         ::=  digit+
--- type              ::=  "b" | "c" | "d" | "e" | "E" | "f" | "F" | "g" | "G" | "o" | "s" | "x" | "X" | "%"
 local function parse_format_string(s)
     local i = 1
     local prev, cur = "", string.char(s:byte(i))
@@ -193,6 +236,34 @@ local function parse_format_string(s)
     return r, i
 end
 
+-- Format arguments according to `fmtstr`.
+-- Literal text is copied wholesale; each instance of a replacement field
+-- (delimited by braces `{}`) is substituted with an argument according to the
+-- following syntax:
+--
+-- replacement_field ::=  "{" [arg_pos] [":" format_spec] "}"
+-- arg_pos           ::=  [digit+]
+-- format_spec       ::=  [[fill]align][sign]["#"]["0"][width]["." precision][type]
+-- fill              ::=  <any character>
+-- align             ::=  "<" | ">" | "=" | "^"
+-- sign              ::=  "+" | "-" | " "
+-- width             ::=  digit+
+-- precision         ::=  digit+
+-- type              ::=  "b" | "c" | "d" | "e" | "E" | "f" | "F"
+--                      | "g" | "G" | "o" | "s" | "x" | "X" | "%"
+--
+-- Differences with python `format`:
+--   - `arg_pos` can only be a number, not a variable name.
+--     One can also mix replacement fields with an `arg_pos` and ones without:
+--     in this case, fields without an `arg_pos` use an internal index variable
+--     that goes up whenever one of these fields is encountered.
+--   - `conversion` isn't supported.
+--   - `grouping_option` isn't supported.
+--   - Most types are supported except `n`. Because lua only has a single
+--     number type, the default type is `d`, which simply outputs the number using
+--     lua `tostring`, which is in most cases equivalent to `g`.
+--   - Specifying both '#' and a `width` allows to format tables with indentation
+--     (where `width` is taken as the indentation size).
 function fmt.format(fmtstr, ...)
     local args, res, n, i = pack(...), "", 1, 1
 
@@ -205,7 +276,7 @@ function fmt.format(fmtstr, ...)
             and spec.typ ~= "fixed" and spec.typ ~= "general" then
             error("precision not allowed in format specifier '" .. spec.typ .. "'")
         end
-        if spec.typ == "decimal" then
+        if spec.typ == "decimal" or spec.typ == nil then
             return old_tostring(num)
         elseif spec.typ == "binary" then
             return prefix("0B", "0b") .. fmt.bin(num)
@@ -223,7 +294,7 @@ function fmt.format(fmtstr, ...)
                 or string.format("%" .. (spec.alt and "#" or "")
                                      .. "." .. (spec.precision == nil and 6 or spec.precision)
                                      .. "f", num)
-        elseif spec.typ == "general" or spec.typ == nil then
+        elseif spec.typ == "general" then
             return (spec.case == "upper" and is_nan(num)) and "NAN"
                 or (spec.case == "upper" and is_inf(num)) and "INF"
                 or string.format("%" .. (spec.alt and "#" or "")
@@ -253,7 +324,6 @@ function fmt.format(fmtstr, ...)
         end
     end
 
-    -- this is an extension
     local function format_table(spec, arg)
         return fmt.format_table(arg, spec.alt
             and { indent = spec.width == 0 and 4 or spec.width }
@@ -338,9 +408,52 @@ function fmt.format(fmtstr, ...)
     return res
 end
 
+-- Patches the global `print` and `tostring` to use fmt `print` and `tostring`.
 function fmt.patch_globals()
     _G.tostring = fmt.tostring
     _G.print = fmt.print
 end
 
 return fmt
+
+--[[
+------------------------------------------------------------------------------
+This software is available under 2 licenses -- choose whichever you prefer.
+------------------------------------------------------------------------------
+ALTERNATIVE A - MIT License
+Copyright (c) 2017 Sean Barrett
+Permission is hereby granted, free of charge, to any person obtaining a copy of
+this software and associated documentation files (the "Software"), to deal in
+the Software without restriction, including without limitation the rights to
+use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies
+of the Software, and to permit persons to whom the Software is furnished to do
+so, subject to the following conditions:
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+------------------------------------------------------------------------------
+ALTERNATIVE B - Public Domain (www.unlicense.org)
+This is free and unencumbered software released into the public domain.
+Anyone is free to copy, modify, publish, use, compile, sell, or distribute this
+software, either in source code form or as a compiled binary, for any purpose,
+commercial or non-commercial, and by any means.
+In jurisdictions that recognize copyright laws, the author or authors of this
+software dedicate any and all copyright interest in the software to the public
+domain. We make this dedication for the benefit of the public at large and to
+the detriment of our heirs and successors. We intend this dedication to be an
+overt act of relinquishment in perpetuity of all present and future rights to
+this software under copyright law.
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
+ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+------------------------------------------------------------------------------
+]]
