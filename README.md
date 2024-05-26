@@ -5,5 +5,6 @@ A bunch of lua utility libraries made for fun. Here's the rundown:
   function that works very similar to python.
 - oop.lua: implementation of a simple OOP system for lua.
 - util.lua: general utilities, check inside for details.
+- math.lua: miscellaneous mathematical utilities.
 
 Unless otherwise noted, all these libraries are on the public domain.
