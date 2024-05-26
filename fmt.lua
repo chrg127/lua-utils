@@ -401,7 +401,7 @@ function fmt.format(fmtstr, ...)
             spec.width     = dependent_arg(spec.width, "width")
             spec.precision = dependent_arg(spec.precision, "precision")
             res = res .. format_arg(spec, get_arg(args, spec.pos))
-            i = index
+            i = i + index
         else
             res = res .. string.char(fmtstr:byte(i))
         end

@@ -1,4 +1,4 @@
-local fmt = require "fmt"
+local fmt = require "fmt"()
 local oop = require "oop"
 --local oop = require "oop-more"
 
@@ -6,11 +6,12 @@ function test_fmt()
     local nested = { a = 1, b = 2, c = { d = 3, e = 4 }}
     print(fmt.format_table(nested, { indent = 4 }))
     print(fmt.format_table(nested, { indent = 2, show_ptr = true }))
-    fmt.pyprint(5, print, {}, nil, { 1, 2, "a" }, io.stdin, { a = 1, b = 2 })
+    print(5, print, {}, nil, { 1, 2, "a" }, io.stdin, { a = 1, b = 2 })
     local mt = { __add = function () return 1 end }
     local t = setmetatable({}, mt)
-    fmt.pyprint(getmetatable(t))
-    print(fmt.pyformat("x = {}", 1))
+    print(getmetatable(t))
+    print(fmt.format("x = {}", 1))
+    print(fmt.format("x = {2:r<#5f}", 1, 2.33))
 end
 
 function test_oop()
