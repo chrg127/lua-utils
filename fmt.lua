@@ -1,4 +1,4 @@
--- fmt.lua - v1.0 - https://github.com/chrg127/lua-utils
+-- fmt.lua - v1.1 - https://github.com/chrg127/lua-utils
 -- no warranty implied, use at your own risk
 --
 -- This is a library for formatting and printing.
@@ -54,6 +54,8 @@ function fmt.format_table(t, opts)
     opts = opts or {}
     opts.indent = opts.indent or 0
     opts._depth = opts._depth or 0
+    opts._locked = opts._locked or {}
+    opts._locked[t] = true
     local line_end = (opts.indent ~= 0 and "\n" or "")
     if next(t) == nil then
         return spaces(opts) .. "{}"
@@ -64,9 +66,10 @@ function fmt.format_table(t, opts)
     local ss = spaces(opts)
     for k, v in pairs(t) do
         local key = type(k) == "string"
-                  and k or "[" .. fmt.str_opts(opts, k) .. "]"
+                  and k or "[" .. fmt.tostring_opts(opts, k) .. "]"
         s = s .. ss .. key .. " = "
-              .. (v == t and '(self)' or fmt.str_opts(opts, v))
+              .. (opts._locked[v] and old_tostring(v)
+                                  or  fmt.tostring_opts(opts, v))
               .. ", " .. line_end
     end
     s = s:sub(1, -3) .. line_end
@@ -74,10 +77,9 @@ function fmt.format_table(t, opts)
     return s .. spaces(opts) .. "}"
 end
 
-
 -- Same as `tostring`, except it takes an `opts` argument. `opts` is only valid
 -- fortables and works the same as `format_table`'s `opts` argument.
-function fmt.str_opts(opts, ...)
+function fmt.tostring_opts(opts, ...)
     local args = pack(...)
     local s = ""
     for i = 1, args.n do
@@ -90,16 +92,16 @@ end
 
 -- Same as `print`, except it takes an `opts` argument. `opts` is only valid
 -- fortables and works the same as `format_table`'s `opts` argument.
-function fmt.print_opts(opts, ...) old_print(fmt.str_opts(opts, ...)) end
+function fmt.print_opts(opts, ...) old_print(fmt.tostring_opts(opts, ...)) end
 
 -- Converts a variable number of arguments to a single string. Each argument
 -- is concatenated by a space.
 -- If an argument is not a table, it is converted using lua `tostring`.
 -- Otherwise it is converted using `format_table`.
-function fmt.tostring(...) return fmt.str_opts(nil, ...) end
+function fmt.tostring(...) return fmt.tostring_opts(nil, ...) end
 
 -- Prints a variable number of arguments using lua `print`. Conversion to
--- string happens the same as `str_opts`.
+-- string happens the same as `tostring_opts`.
 function fmt.print(...) return fmt.print_opts(nil, ...) end
 
 -- Converts a number to binary.
@@ -409,9 +411,12 @@ function fmt.format(fmtstr, ...)
 end
 
 -- Patches the global `print` and `tostring` to use fmt `print` and `tostring`.
+-- This function can be called at `require`-time. It returns `fmt` to make sure
+-- `require` still works correctly.
 function fmt.patch_globals()
     _G.tostring = fmt.tostring
     _G.print = fmt.print
+    return fmt
 end
 
 return setmetatable(fmt, { __call = fmt.patch_globals })
