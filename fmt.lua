@@ -414,7 +414,7 @@ function fmt.patch_globals()
     _G.print = fmt.print
 end
 
-return fmt
+return setmetatable(fmt, { __call = fmt.patch_globals })
 
 --[[
 ------------------------------------------------------------------------------
